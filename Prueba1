@@ -1,0 +1,83 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <WiFiClientSecure.h>
+
+// Configuracion WiFi
+const char* ssid = "WIFI226D1";
+const char* password = "YYZQZJMNESCYDGNZ";
+
+// Configuracion MQTT
+const char* mqtt_server = "b5c381230e574839b8eebc8c461fb126.s1.eu.hivemq.cloud";
+const int mqtt_port = 8883;
+const char* mqtt_user = "Alexandre";
+const char* mqtt_password = "Alexandre298";
+const char* mqtt_topic_pub = "test/topic/pub";
+const char* mqtt_topic_sub = "test/topic/sub";
+
+WiFiClientSecure wifiClient;
+PubSubClient client(wifiClient);
+
+void setupWifi() {
+  Serial.print("Conectando a WiFi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi conectado.");
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Mensaje recibido en topic: ");
+  Serial.println(topic);
+
+  Serial.print("Mensaje: ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Conectando al broker MQTT...");
+    if (client.connect("ESP32Client", mqtt_user, mqtt_password)) {
+      Serial.println("Conectado.");
+      client.subscribe(mqtt_topic_sub);
+    } else {
+      Serial.print("Fallo, rc=");
+      Serial.print(client.state());
+      Serial.println(" Intentando de nuevo en 5 segundos.");
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  setupWifi();
+
+  wifiClient.setInsecure(); // Solo para pruebas, elimina esta linea y usa un certificado en produccion.
+
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop();
+
+  // Publicar un mensaje
+  static unsigned long lastPublishTime = 0;
+  if (millis() - lastPublishTime > 5000) {
+    lastPublishTime = millis();
+    String message = "Hello from ESP32!";
+    if (client.publish(mqtt_topic_pub, message.c_str())) {
+      Serial.println("Mensaje publicado correctamente.");
+    } else {
+      Serial.println("Error al publicar el mensaje.");
+    }
+  }
+}
